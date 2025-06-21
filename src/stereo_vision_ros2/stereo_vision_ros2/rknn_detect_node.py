@@ -29,8 +29,8 @@ from std_msgs.msg import Header, ColorRGBA
 from geometry_msgs.msg import Point
 from cv_bridge import CvBridge
 
-# 导入自定义服务（需要构建后才能导入）
-# from stereo_vision_ros2.srv import DetectImageWithConfidence, DetermineBodyPosition
+# 导入自定义服务
+from stereo_vision_interfaces.srv import DetectImageWithConfidence, DetermineBodyPosition
 
 # 尝试导入RKNN和sklearn，如果失败则提供替代方案
 try:

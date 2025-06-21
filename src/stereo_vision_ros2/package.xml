@@ -22,10 +22,10 @@
   <exec_depend>python3-pil</exec_depend>
   <exec_depend>python3-sklearn</exec_depend>
   
-  <!-- 构建工具依赖 -->
-  <build_depend>rosidl_default_generators</build_depend>
-  <exec_depend>rosidl_default_runtime</exec_depend>
+  <!-- 接口功能包依赖 -->
+  <depend>stereo_vision_interfaces</depend>
   
+  <!-- 测试依赖 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

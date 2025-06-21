@@ -21,13 +21,25 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'stereo_vision_ros
 import rclpy
 from rclpy.node import Node
 
-# 尝试导入节点类
+# 尝试导入节点类和算法函数
 try:
-    from rknn_detect_node_main import RKNNDetectorNode
-    from rknn_detect_node import *
+    # 先导入算法模块
+    from stereo_vision_ros2.stereo_vision_ros2.rknn_detect_node import *
+    # 再导入节点主类
+    from stereo_vision_ros2.stereo_vision_ros2.rknn_detect_node_main import RKNNDetectorNode
 except ImportError as e:
     print(f"导入节点失败: {e}")
     print("请确保已正确构建功能包")
+    # 为了让测试能继续运行，我们设置一些默认值
+    RKNNDetectorNode = None
+    CLASSES = None
+    CLOTHING_CATEGORIES = None
+    sigmoid = None
+    xywh2xyxy = None
+    letterbox = None
+    get_dominant_color = None
+    Determine_the_position_of_the_entire_body = None
+    PerformanceMonitor = None
 
 
 class TestRKNNDetector(unittest.TestCase):

@@ -4,6 +4,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from rknn_detect_node import *
+from std_msgs.msg import ColorRGBA
 
 class RKNNDetectorNode(Node):
     """
@@ -92,23 +93,22 @@ class RKNNDetectorNode(Node):
         """设置ROS2服务"""
         try:
             # 创建图像检测服务
-            # 注意：由于服务定义可能还未构建，我们使用简单的回调
-            # self.detect_image_service = self.create_service(
-            #     DetectImageWithConfidence,
-            #     '/detect_image_with_confidence',
-            #     self.detect_image_callback
-            # )
+            self.detect_image_service = self.create_service(
+                DetectImageWithConfidence,
+                '/detect_image_with_confidence',
+                self.detect_image_callback
+            )
             
             # 创建身体位置判断服务
-            # self.body_position_service = self.create_service(
-            #     DetermineBodyPosition,
-            #     '/determine_body_position',
-            #     self.determine_body_position_callback
-            # )
+            self.body_position_service = self.create_service(
+                DetermineBodyPosition,
+                '/determine_body_position',
+                self.determine_body_position_callback
+            )
             
             self.get_logger().info('服务设置完成')
-            # self.get_logger().info('图像检测服务: /detect_image_with_confidence')
-            # self.get_logger().info('身体位置判断服务: /determine_body_position')
+            self.get_logger().info('图像检测服务: /detect_image_with_confidence')
+            self.get_logger().info('身体位置判断服务: /determine_body_position')
             
         except Exception as e:
             self.get_logger().error(f'服务设置失败: {str(e)}')
@@ -262,6 +262,150 @@ class RKNNDetectorNode(Node):
             logger.error(f"图像检测出错: {str(e)}")
             logger.error(f"错误堆栈:\n{traceback.format_exc()}")
             return []
+
+    def detect_image_callback(self, request, response):
+        """
+        图像检测服务回调函数
+        调用detect_picture_with_confidence函数进行检测
+        """
+        try:
+            self.get_logger().info('收到图像检测请求')
+            
+            # 将ROS图像消息转换为OpenCV图像
+            cv_image = self.bridge.imgmsg_to_cv2(request.image, 'bgr8')
+            
+            # 调用检测函数
+            pairs = self.detect_picture_with_confidence(cv_image)
+            
+            # 初始化响应数据
+            response.upper_positions = []
+            response.lower_positions = []
+            response.upper_colors = []
+            response.lower_colors = []
+            response.upper_confidences = []
+            response.lower_confidences = []
+            response.pairs_count = len(pairs)
+            
+            # 处理检测结果
+            for pair in pairs:
+                if len(pair) >= 6:  # 确保有完整的数据
+                    upper_item, lower_item, upper_color, lower_color, upper_conf, lower_conf = pair[:6]
+                    
+                    # 处理上衣信息
+                    if len(upper_item) >= 4:  # 有效的上衣检测
+                        upper_pos = Point()
+                        upper_pos.x = float(upper_item[0])  # xmin
+                        upper_pos.y = float(upper_item[1])  # ymin
+                        upper_pos.z = float((upper_item[2] << 16) | upper_item[3])  # 编码xmax和ymax
+                        response.upper_positions.append(upper_pos)
+                        
+                        # 上衣颜色 (BGR转RGB)
+                        upper_color_msg = ColorRGBA()
+                        if len(upper_color) >= 3:
+                            upper_color_msg.r = float(upper_color[2]) / 255.0  # B->R
+                            upper_color_msg.g = float(upper_color[1]) / 255.0  # G->G
+                            upper_color_msg.b = float(upper_color[0]) / 255.0  # R->B
+                            upper_color_msg.a = 1.0
+                        response.upper_colors.append(upper_color_msg)
+                        
+                        response.upper_confidences.append(float(upper_conf))
+                    
+                    # 处理下装信息
+                    if len(lower_item) >= 4:  # 有效的下装检测
+                        lower_pos = Point()
+                        lower_pos.x = float(lower_item[0])  # xmin
+                        lower_pos.y = float(lower_item[1])  # ymin
+                        lower_pos.z = float((lower_item[2] << 16) | lower_item[3])  # 编码xmax和ymax
+                        response.lower_positions.append(lower_pos)
+                        
+                        # 下装颜色 (BGR转RGB)
+                        lower_color_msg = ColorRGBA()
+                        if len(lower_color) >= 3:
+                            lower_color_msg.r = float(lower_color[2]) / 255.0  # B->R
+                            lower_color_msg.g = float(lower_color[1]) / 255.0  # G->G
+                            lower_color_msg.b = float(lower_color[0]) / 255.0  # R->B
+                            lower_color_msg.a = 1.0
+                        response.lower_colors.append(lower_color_msg)
+                        
+                        response.lower_confidences.append(float(lower_conf))
+            
+            response.success = True
+            response.message = f"检测成功，找到{response.pairs_count}对服装"
+            self.get_logger().info(f'图像检测完成: {response.message}')
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"图像检测失败: {str(e)}"
+            self.get_logger().error(f'图像检测服务错误: {str(e)}')
+            self.get_logger().error(f"错误堆栈:\n{traceback.format_exc()}")
+        
+        return response
+
+    def determine_body_position_callback(self, request, response):
+        """
+        身体位置判断服务回调函数
+        调用Determine_the_position_of_the_entire_body函数
+        """
+        try:
+            self.get_logger().info('收到身体位置判断请求')
+            
+            # 将ROS图像消息转换为OpenCV图像
+            cv_image = self.bridge.imgmsg_to_cv2(request.image, 'bgr8')
+            
+            # 解析上衣坐标
+            upper_coord = []
+            if request.upper_clothes_coord.x >= 0:  # 有效坐标
+                xmax = int(request.upper_clothes_coord.z) & 0xFFFF
+                ymax = int(request.upper_clothes_coord.z) >> 16
+                upper_coord = [
+                    int(request.upper_clothes_coord.x),  # xmin
+                    int(request.upper_clothes_coord.y),  # ymin
+                    xmax,  # xmax
+                    ymax   # ymax
+                ]
+            else:
+                upper_coord = [-1]  # 占位符
+            
+            # 解析下装坐标
+            lower_coord = []
+            if request.lower_clothes_coord.x >= 0:  # 有效坐标
+                xmax = int(request.lower_clothes_coord.z) & 0xFFFF
+                ymax = int(request.lower_clothes_coord.z) >> 16
+                lower_coord = [
+                    int(request.lower_clothes_coord.x),  # xmin
+                    int(request.lower_clothes_coord.y),  # ymin
+                    xmax,  # xmax
+                    ymax   # ymax
+                ]
+            else:
+                lower_coord = [-1]  # 占位符
+            
+            # 调用身体位置判断函数
+            body_positions = Determine_the_position_of_the_entire_body(
+                upper_coord, lower_coord, cv_image
+            )
+            
+            # 构建响应
+            response.body_positions = []
+            for pos in body_positions:
+                if len(pos) >= 4:
+                    body_pos = Point()
+                    body_pos.x = float(pos[0])  # xmin
+                    body_pos.y = float(pos[1])  # ymin
+                    body_pos.z = float((pos[2] << 16) | pos[3])  # 编码xmax和ymax
+                    response.body_positions.append(body_pos)
+            
+            response.success = True
+            response.message = f"身体位置判断成功，找到{len(response.body_positions)}个身体区域"
+            self.get_logger().info(f'身体位置判断完成: {response.message}')
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"身体位置判断失败: {str(e)}"
+            self.get_logger().error(f'身体位置判断服务错误: {str(e)}')
+            self.get_logger().error(f"错误堆栈:\n{traceback.format_exc()}")
+        
+        return response
 
     def destroy_node(self):
         """节点销毁时的清理工作"""

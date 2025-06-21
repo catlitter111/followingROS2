@@ -29,20 +29,8 @@ from std_msgs.msg import Header
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Point
 
-# 导入自定义服务（需要构建后才能导入）
-# from stereo_vision_ros2.srv import GetDistance
-
-# 由于服务接口可能还未构建，我们先定义一个临时的服务响应结构
-class GetDistanceResponse:
-    def __init__(self):
-        self.success = False
-        self.distance = 0.0
-        self.message = ""
-
-class GetDistanceRequest:
-    def __init__(self):
-        self.x = 0
-        self.y = 0
+# 导入自定义服务
+from stereo_vision_interfaces.srv import GetDistance
 
 # 尝试导入Open3D，如果失败则提供替代方案
 try:
@@ -437,12 +425,11 @@ class StereoVisionNode(Node):
             )
             
             # 创建距离查询服务
-            # 注意：由于服务定义可能还未构建，我们使用一个简单的回调
-            # self.distance_service = self.create_service(
-            #     GetDistance,
-            #     '/stereo_vision/get_distance',
-            #     self.get_distance_callback
-            # )
+            self.distance_service = self.create_service(
+                GetDistance,
+                '/stereo_vision/get_distance',
+                self.get_distance_callback
+            )
             
             # 创建定时器用于图像采集和处理
             self.timer = self.create_timer(1.0 / self.config.fps_limit, self.timer_callback)
@@ -453,7 +440,7 @@ class StereoVisionNode(Node):
             self.get_logger().info('双目视觉节点初始化成功')
             self.get_logger().info(f'相机分辨率: {self.config.frame_width}x{self.config.frame_height}')
             self.get_logger().info(f'发布话题: /stereo_vision/left_image, /stereo_vision/disparity')
-            # self.get_logger().info(f'距离查询服务: /stereo_vision/get_distance')
+            self.get_logger().info(f'距离查询服务: /stereo_vision/get_distance')
             
         except Exception as e:
             self.get_logger().error(f'节点初始化失败: {str(e)}')

@@ -12,12 +12,12 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        # 包含服务定义文件
-        (os.path.join('share', package_name, 'srv'), glob('srv/*.srv')),
         # 包含launch文件
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         # 包含数据文件（RKNN模型等）
         (os.path.join('share', package_name, 'data'), glob('data/*')),
+        # ROS2可执行文件位置
+        (os.path.join('lib', package_name), []),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
