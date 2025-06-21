@@ -1,0 +1,14 @@
+# 图像检测服务定义 - 调用detect_picture_with_confidence函数
+# 请求：输入图像
+sensor_msgs/Image image
+---
+# 响应：检测结果
+geometry_msgs/Point[] upper_positions      # 上衣位置坐标列表 [xmin, ymin, xmax, ymax]
+geometry_msgs/Point[] lower_positions      # 下装位置坐标列表 [xmin, ymin, xmax, ymax]
+std_msgs/ColorRGBA[] upper_colors         # 上衣颜色列表 (BGR转RGB)
+std_msgs/ColorRGBA[] lower_colors         # 下装颜色列表 (BGR转RGB)
+float64[] upper_confidences               # 上衣置信度列表
+float64[] lower_confidences               # 下装置信度列表
+int32 pairs_count                         # 检测到的服装对数量
+bool success                              # 处理成功标志
+string message                            # 处理结果消息 

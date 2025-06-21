@@ -16,6 +16,8 @@ setup(
         (os.path.join('share', package_name, 'srv'), glob('srv/*.srv')),
         # 包含launch文件
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+        # 包含数据文件（RKNN模型等）
+        (os.path.join('share', package_name, 'data'), glob('data/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,6 +30,7 @@ setup(
         'console_scripts': [
             'stereo_vision_node = stereo_vision_ros2.stereo_vision_node:main',
             'test_distance_client = stereo_vision_ros2.test_distance_client:main',
+            'rknn_detect_node = stereo_vision_ros2.rknn_detect_node_main:main',
         ],
     },
 ) 

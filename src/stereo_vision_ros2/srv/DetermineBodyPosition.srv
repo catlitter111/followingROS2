@@ -1,0 +1,10 @@
+# 身体位置判断服务定义 - 调用Determine_the_position_of_the_entire_body函数
+# 请求：上衣坐标、下装坐标、图像
+geometry_msgs/Point upper_clothes_coord   # 上衣坐标 (x=xmin, y=ymin, z编码宽高)
+geometry_msgs/Point lower_clothes_coord   # 下装坐标 (x=xmin, y=ymin, z编码宽高)
+sensor_msgs/Image image                   # 图像数据
+---
+# 响应：身体位置信息
+geometry_msgs/Point[] body_positions     # 整体身体位置坐标列表
+bool success                            # 处理成功标志
+string message                          # 处理结果消息 
