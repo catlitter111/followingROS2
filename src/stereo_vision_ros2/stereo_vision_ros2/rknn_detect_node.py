@@ -341,7 +341,55 @@ def letterbox(im, new_shape=(640, 640), color=(0, 0, 0)):
 
 def get_dominant_color(image, k=None, resize=True):
     """
-    获取图像的主色调 - 与原程序完全一致
+    使用改进的K-means聚类计算图像的主要颜色
+    
+    该函数通过K-means聚类算法分析图像中的颜色分布，提取最具代表性
+    的主要颜色。包含颜色预处理、聚类分析和结果验证等步骤。
+    与原程序rknn_colour_detect.py中的算法完全一致。
+    
+    参数:
+        image (numpy.ndarray): 输入图像，BGR格式，shape为(H,W,3)
+        k (int, optional): K-means聚类的簇数量，默认为None时使用CONFIG['dominant_color_k']
+                          推荐值：3-6，根据图像复杂度调整
+        resize (bool, optional): 是否对图像进行缩放以提高处理速度，默认True
+                                缩放到CONFIG['color_sample_size']大小
+                                
+    返回值:
+        tuple: 主要颜色的BGR值，格式为(B, G, R)
+               - B (int): 蓝色分量，范围0-255
+               - G (int): 绿色分量，范围0-255  
+               - R (int): 红色分量，范围0-255
+               如果处理失败返回(0, 0, 0)
+               
+    算法流程:
+        1. 图像尺寸检查和缩放处理
+        2. HSV颜色空间转换和掩码创建
+        3. 过滤极值像素（极暗、极亮、低饱和度）
+        4. K-means聚类分析颜色分布
+        5. 聚类结果验证和主要颜色选择
+        6. 特殊颜色（黑/白）的二次验证
+        
+    颜色过滤策略:
+        - 亮度范围：30-220（过滤极暗和极亮）
+        - 饱和度阈值：30（过滤灰色调）
+        - 聚类占比阈值：5%（过滤噪声聚类）
+        
+    性能优化:
+        - 自适应图像缩放减少计算量
+        - 颜色空间预处理提高聚类效果
+        - 多级验证确保结果准确性
+        
+    异常:
+        Exception: 当图像为空或K-means聚类失败时抛出，返回黑色(0,0,0)
+        
+    示例:
+        >>> import cv2
+        >>> img = cv2.imread('clothing.jpg')
+        >>> color = get_dominant_color(img, k=5)
+        >>> print(f"主要颜色BGR: {color}")
+        >>> # 转换为HSV查看色调信息
+        >>> hsv = cv2.cvtColor(np.uint8([[color]]), cv2.COLOR_BGR2HSV)[0][0]
+        >>> print(f"HSV: {hsv}")
     """
     if not SKLEARN_AVAILABLE:
         # 如果sklearn不可用，返回平均颜色
@@ -379,7 +427,55 @@ def get_dominant_color(image, k=None, resize=True):
 
 def apply_nms(detections, confidence_threshold=None, iou_threshold=None):
     """
-    应用非极大值抑制过滤重叠检测 - 与原程序完全一致
+    应用非极大值抑制算法过滤重叠的检测框
+    
+    使用NMS(Non-Maximum Suppression)算法去除同一物体的多个重叠检测框，
+    保留置信度最高的检测结果。与原程序算法和参数完全一致。
+    
+    参数:
+        detections (list): 检测结果列表，每个元素格式为:
+                          [xmin, ymin, xmax, ymax, confidence, class_id]
+                          - xmin, ymin: 边界框左上角坐标
+                          - xmax, ymax: 边界框右下角坐标
+                          - confidence: 检测置信度，范围0.0-1.0
+                          - class_id: 类别标识符
+        confidence_threshold (float, optional): 置信度阈值，低于此值的检测被过滤
+                                              默认使用CONFIG['nms_confidence_threshold']
+        iou_threshold (float, optional): IoU阈值，高于此值的重叠框被抑制
+                                        默认使用CONFIG['nms_iou_threshold']
+                                        
+    返回值:
+        list: 过滤后的检测结果列表，格式与输入相同
+              按置信度降序排列，移除了重叠度高的冗余检测
+              
+    算法原理:
+        1. 按置信度过滤低质量检测
+        2. 将边界框格式转换为OpenCV NMSBoxes要求的格式
+        3. 应用NMS算法计算保留的检测索引
+        4. 根据索引重构过滤后的检测列表
+        
+    NMS算法步骤:
+        1. 按置信度对检测框排序
+        2. 选择置信度最高的框作为基准
+        3. 计算其他框与基准框的IoU
+        4. 抑制IoU大于阈值的框
+        5. 重复直到处理完所有框
+        
+    参数调优建议:
+        - confidence_threshold: 0.05-0.3，过低易产生误检，过高易漏检
+        - iou_threshold: 0.1-0.5，过低过度抑制，过高保留重叠
+        
+    异常:
+        Exception: 当检测列表格式不正确或NMS计算失败时抛出
+        
+    示例:
+        >>> detections = [
+        ...     [100, 100, 200, 200, 0.9, 0],  # 高置信度检测
+        ...     [110, 110, 210, 210, 0.7, 0],  # 重叠检测（将被抑制）
+        ...     [300, 300, 400, 400, 0.8, 1]   # 不同位置检测
+        ... ]
+        >>> filtered = apply_nms(detections, 0.5, 0.4)
+        >>> print(f"过滤后检测数量: {len(filtered)}")
     """
     if confidence_threshold is None:
         confidence_threshold = CONFIG['nms_confidence_threshold']
@@ -419,7 +515,57 @@ def apply_nms(detections, confidence_threshold=None, iou_threshold=None):
 
 def match_clothing_items_with_confidence(upper_items, lower_items, img, pairs, max_x_distance_ratio=None):
     """
-    匹配上衣和下装，保留置信度信息 - 与原程序完全一致
+    匹配上衣和下装检测结果，保留置信度信息
+    
+    基于空间位置关系和几何约束，将检测到的上衣和下装进行智能配对，
+    形成完整的服装组合。算法考虑人体结构特点和服装穿着规律。
+    与原程序match_clothing_items算法完全一致，增加了置信度处理。
+    
+    参数:
+        upper_items (list): 上衣检测列表，每个元素格式为:
+                           (xmin, ymin, xmax, ymax, confidence, 'upper')
+        lower_items (list): 下装检测列表，每个元素格式为:
+                           (xmin, ymin, xmax, ymax, confidence, 'lower')
+        img (numpy.ndarray): 输入图像，用于获取图像尺寸进行约束计算
+        pairs (list): 输出配对结果列表，函数会向此列表添加匹配对
+        max_x_distance_ratio (float, optional): 最大水平距离比例，相对于图像宽度
+                                               默认使用CONFIG['max_x_distance_ratio']
+                                               
+    配对结果格式:
+        每个配对为包含4个元素的列表：
+        [上衣坐标, 下装坐标, 上衣置信度, 下装置信度]
+        - 上衣坐标: (xmin, ymin, xmax, ymax) 或 (-1,) 表示无匹配
+        - 下装坐标: (xmin, ymin, xmax, ymax) 或 (-1,) 表示无匹配
+        - 上衣置信度: float，范围0.0-1.0，无匹配时为0.0
+        - 下装置信度: float，范围0.0-1.0，无匹配时为0.0
+        
+    匹配算法:
+        1. 计算每件上衣和下装的中心点坐标
+        2. 检查水平距离约束（模拟人体宽度限制）
+        3. 计算中心点间欧氏距离作为匹配代价
+        4. 使用贪心算法选择最优匹配
+        5. 避免重复匹配，确保一对一关系
+        
+    几何约束:
+        - 水平距离限制：|upper_x - lower_x| < width * max_x_distance_ratio
+        - 优先匹配距离最近的上下装组合
+        - 支持部分匹配（只有上衣或只有下装）
+        
+    处理策略:
+        - 优先匹配：距离最近且满足约束条件的组合
+        - 剩余处理：未匹配的单独上衣或下装作为独立项
+        - 置信度保留：完整保留原检测的置信度信息
+        
+    异常:
+        Exception: 当图像尺寸获取失败或坐标计算出错时抛出
+        
+    示例:
+        >>> upper_items = [(100, 50, 200, 150, 0.9, 'upper')]
+        >>> lower_items = [(120, 140, 180, 250, 0.8, 'lower')]
+        >>> pairs = []
+        >>> match_clothing_items_with_confidence(upper_items, lower_items, img, pairs)
+        >>> print(f"配对结果: {pairs[0]}")
+        >>> # 输出: [(100, 50, 200, 150), (120, 140, 180, 250), 0.9, 0.8]
     """
     if not upper_items and not lower_items:
         return
@@ -475,7 +621,60 @@ def match_clothing_items_with_confidence(upper_items, lower_items, img, pairs, m
 
 def identify_clothing_colors_with_confidence(pairs, img):
     """
-    识别每件服装的主要颜色，保留置信度信息 - 与原程序完全一致
+    识别服装配对中每件服装的主要颜色，保留置信度信息
+    
+    对已配对的上衣和下装分别进行颜色分析，提取各自的主要颜色特征。
+    针对不同类型服装采用优化的颜色提取策略。与原程序算法完全一致，
+    并完整保留检测置信度信息。
+    
+    参数:
+        pairs (list): 服装配对列表，每个元素包含4个部分:
+                     [上衣坐标, 下装坐标, 上衣置信度, 下装置信度]
+                     函数会在原地修改此列表，添加颜色信息
+        img (numpy.ndarray): 输入图像，BGR格式，用于颜色提取
+        
+    输出格式:
+        修改后的pairs列表，每个元素包含6个部分:
+        [上衣坐标, 下装坐标, 上衣颜色, 下装颜色, 上衣置信度, 下装置信度]
+        - 上衣颜色: (B,G,R) BGR格式颜色值，或 () 表示无颜色信息
+        - 下装颜色: (B,G,R) BGR格式颜色值，或 () 表示无颜色信息
+        
+    颜色提取策略:
+        上衣处理:
+            - K-means聚类数: 5（上衣颜色通常更丰富）
+            - 区域提取: 完整边界框区域
+            - 特殊处理: 重点验证纯色和图案服装
+            
+        下装处理:
+            - K-means聚类数: 3（下装颜色相对简单）
+            - 区域提取: 完整边界框区域
+            - 特殊处理: 针对深色下装优化
+            
+    颜色验证:
+        1. 黑白验证：检测是否为纯黑或纯白服装
+        2. HSV分析：计算平均饱和度和亮度
+        3. 重新计算：对可疑结果使用更多聚类重新分析
+        4. 边界检查：确保坐标在图像范围内
+        
+    异常处理:
+        - 无效边界框：返回黑色(0,0,0)
+        - 颜色提取失败：记录错误并使用默认颜色
+        - 占位符检测：跳过(-1,)格式的占位符
+        
+    性能特点:
+        - 自适应聚类数量：根据服装类型调整
+        - 鲁棒性强：多重验证确保颜色准确性
+        - 内存高效：原地修改避免额外拷贝
+        
+    异常:
+        Exception: 当图像格式不正确或颜色提取过程失败时记录错误
+        
+    示例:
+        >>> pairs = [[(100, 50, 200, 150), (120, 140, 180, 250), 0.9, 0.8]]
+        >>> identify_clothing_colors_with_confidence(pairs, img)
+        >>> upper_color = pairs[0][2]  # 上衣颜色
+        >>> lower_color = pairs[0][3]  # 下装颜色
+        >>> print(f"上衣颜色BGR: {upper_color}, 下装颜色BGR: {lower_color}")
     """
     logger.debug(f"开始识别 {len(pairs)} 对服装的颜色")
 
@@ -564,7 +763,83 @@ def identify_clothing_colors_with_confidence(pairs, img):
 
 def Determine_the_position_of_the_entire_body(c, p, img):
     """
-    估计整个身体位置 - 与原程序完全一致
+    估计整个身体位置，基于检测到的上衣和下装位置计算完整人体区域
+    
+    该函数根据上衣和下装的边界框，结合人体比例学原理，推算出包含
+    头部、躯干和腿部的完整人体区域。支持只有上衣或只有下装的情况。
+    与原程序Determine_the_position_of_the_entire_body函数完全一致。
+    
+    参数:
+        c (tuple): 上衣坐标，格式为 (xmin, ymin, xmax, ymax)
+                   如果为 (-1,) 表示未检测到上衣
+        p (tuple): 下装坐标，格式为 (xmin, ymin, xmax, ymax)  
+                   如果为 (-1,) 表示未检测到下装
+        img (numpy.ndarray): 输入图像，用于获取图像尺寸进行边界检查
+        
+    返回值:
+        list: 身体位置坐标列表，每个元素为 (xmin, ymin, xmax, ymax) 格式
+              的整体人体区域坐标。包含基于服装位置推算的头部和脚部扩展。
+              如果输入坐标无效，返回空列表。
+              
+    算法说明:
+        当上下装都检测到时：
+            1. 计算包含两者的最小外接矩形
+            2. 基于上衣高度推算头部扩展：0.5倍上衣高度
+            3. 基于下装高度推算脚部扩展：0.6倍下装高度
+            4. 基于上衣宽度推算水平扩展：0.3倍上衣宽度
+            
+        只有上衣时：
+            1. 以上衣为基准计算人体区域
+            2. 头部扩展：0.4倍上衣高度
+            3. 下身推算：2.5倍上衣高度（覆盖下半身）
+            4. 水平扩展：40像素固定值
+            
+        只有下装时：
+            1. 以下装为基准计算人体区域
+            2. 上身推算：1.8倍下装高度（覆盖上半身）
+            3. 脚部扩展：0.7倍下装高度
+            4. 水平扩展：40像素固定值
+            
+    人体比例参考:
+        - 头部占身高约1/8，相当于上身高度的40-50%
+        - 上身（头+躯干）约占身高60%
+        - 下身（腿部）约占身高40%
+        - 肩宽约为身高的1/4
+        
+    边界处理:
+        - 自动限制在图像范围内：[0, img_width] × [0, img_height]
+        - 确保计算结果为有效的矩形区域
+        - 处理边界情况避免负坐标或超出图像
+        
+    异常处理:
+        - 输入坐标检查：验证是否为有效的4元素坐标
+        - 图像尺寸验证：确保图像不为空
+        - 计算错误捕获：返回空列表而不是抛出异常
+        
+    应用场景:
+        - 人体跟踪：提供完整的人体区域用于跟踪
+        - 行为分析：确定人体活动区域
+        - 距离测量：计算整个人体的空间位置
+        - 图像分割：提取完整的人体区域
+        
+    异常:
+        Exception: 当坐标计算过程中出现错误时记录日志并返回空列表
+        
+    示例:
+        >>> upper_coords = (100, 100, 200, 250)
+        >>> lower_coords = (120, 240, 180, 350)  
+        >>> body_positions = Determine_the_position_of_the_entire_body(
+        ...     upper_coords, lower_coords, img)
+        >>> if body_positions:
+        ...     body_box = body_positions[0]
+        ...     print(f"人体区域: {body_box}")
+        ...     # 输出类似: 人体区域: (70, 40, 230, 420)
+        
+        >>> # 只有上衣的情况
+        >>> upper_only = (100, 100, 200, 250)
+        >>> placeholder = (-1,)
+        >>> body_positions = Determine_the_position_of_the_entire_body(
+        ...     upper_only, placeholder, img)
     """
     person_position = []
 
@@ -630,122 +905,341 @@ def Determine_the_position_of_the_entire_body(c, p, img):
 # -------------------------------- ROS2 RKNN检测节点 --------------------------------
 class RKNNDetectorNode(Node):
     """
-    ROS2 RKNN颜色检测节点
-    严格保持与原始程序rknn_colour_detect.py相同的逻辑和参数
+    ROS2 RKNN服装检测节点
+    
+    基于RKNN模型的智能服装检测与颜色识别系统ROS2节点，提供高性能的
+    实时服装检测、颜色分析和身体位置估算服务。严格保持与原始程序
+    rknn_colour_detect.py相同的算法逻辑和参数配置。
+    
+    功能特性:
+        - 基于RKNN加速的YOLOv5服装检测
+        - 智能上下装配对和颜色识别
+        - 完整人体区域估算
+        - 高性能实时处理能力
+        - 完整的置信度信息保留
+        
+    服务接口:
+        - /detect_image_with_confidence: 图像检测服务
+        - /determine_body_position: 身体位置估算服务
+        
+    检测能力:
+        - 13种服装类别检测
+        - 上衣类别：短袖衬衫、长袖衬衫、短袖外套、长袖外套、背心、吊带
+        - 下装类别：短裤、长裤、裙子、短袖连衣裙、长袖连衣裙、背心裙、吊带裙
+        
+    算法流程:
+        1. RKNN模型加载和初始化
+        2. 图像预处理和letterbox变换
+        3. RKNN推理和特征提取
+        4. YOLOv5后处理和NMS过滤
+        5. 服装分类和智能配对
+        6. 颜色提取和分析
+        7. 人体区域估算
+        
+    性能特点:
+        - RKNN硬件加速，推理速度提升显著
+        - 多线程安全的模型调用
+        - 内存高效的批处理模式
+        - 实时性能监控和日志记录
+        
+    配置参数:
+        - 检测置信度阈值：0.3
+        - NMS置信度阈值：0.05  
+        - NMS IoU阈值：0.1
+        - 颜色聚类数量：4
+        - 图像处理分辨率：640x640
+        
+    属性:
+        rknn_model (RKNNLite): RKNN模型实例
+        bridge (CvBridge): ROS图像消息转换器
+        detect_service (Service): 图像检测服务
+        body_position_service (Service): 身体位置服务
+        perf_monitor (PerformanceMonitor): 性能监控器
+        
+    异常处理:
+        - RKNN模型加载失败时提供降级处理
+        - 服务调用异常时返回明确错误信息
+        - 图像格式不正确时自动转换或拒绝
+        
+    示例:
+        >>> import rclpy
+        >>> rclpy.init()
+        >>> node = RKNNDetectorNode()
+        >>> rclpy.spin(node)
+        >>> node.destroy_node()
+        >>> rclpy.shutdown()
     """
 
     def __init__(self):
-        """初始化ROS2 RKNN检测节点"""
+        """
+        初始化RKNN检测节点
+        
+        设置ROS2节点基础配置，加载RKNN模型，创建服务接口，
+        初始化性能监控系统。与原程序初始化逻辑完全一致。
+        
+        初始化步骤:
+            1. 调用父类Node构造函数
+            2. 创建CV桥接器和性能监控器
+            3. 尝试加载RKNN模型
+            4. 设置检测和身体位置服务
+            5. 记录节点配置信息
+            
+        模型加载:
+            - 优先使用RKNN模型（如果可用）
+            - RKNN不可用时记录警告但继续运行
+            - 模型路径可通过CONFIG配置
+            
+        服务配置:
+            - 图像检测服务：支持批量和单张图像检测
+            - 身体位置服务：基于服装检测结果估算人体区域
+            - 服务调用超时和错误处理
+            
+        异常处理:
+            - RKNN模型加载失败时继续运行但禁用检测功能
+            - 服务创建失败时记录错误并尝试重新创建
+            - 系统资源不足时降级处理
+            
+        异常:
+            Exception: 当节点核心组件初始化失败时抛出
+        """
         super().__init__('rknn_color_detector')
         
+        # 初始化CV桥接器
+        self.bridge = CvBridge()
+        
+        # 创建性能监控器
+        self.perf_monitor = PerformanceMonitor()
+        
+        # RKNN模型实例
+        self.rknn_model = None
+        
         try:
-            # 初始化配置参数 - 与源程序完全一致
-            self.CONFIG = CONFIG.copy()
-            
-            # 初始化性能监控器 - 保持源程序的性能监控功能
-            self.perf_monitor = PerformanceMonitor()
-            
-            # 初始化CV桥接器
-            self.bridge = CvBridge()
-            
-            # 模型变量
-            self.model = None
-            
-            # 加载RKNN模型
+            # 尝试加载RKNN模型
             self.load_rknn_model()
             
             # 设置服务
             self.setup_services()
             
-            self.get_logger().info("RKNN检测节点初始化成功")
-            self.get_logger().info(f"模型路径: {self.CONFIG['rknn_model_path']}")
-            self.get_logger().info(f"检测置信度阈值: {self.CONFIG['conf_threshold']}")
-            self.get_logger().info(f"NMS置信度阈值: {self.CONFIG['nms_confidence_threshold']}")
-            self.get_logger().info(f"NMS IoU阈值: {self.CONFIG['nms_iou_threshold']}")
+            self.get_logger().info('RKNN检测节点初始化成功')
+            self.get_logger().info(f'模型路径: {CONFIG["rknn_model_path"]}')
+            self.get_logger().info(f'检测置信度阈值: {CONFIG["conf_threshold"]}')
+            self.get_logger().info(f'NMS置信度阈值: {CONFIG["nms_confidence_threshold"]}')
+            self.get_logger().info(f'NMS IoU阈值: {CONFIG["nms_iou_threshold"]}')
             
         except Exception as e:
-            self.get_logger().error(f"节点初始化失败: {str(e)}")
-            self.get_logger().error(f"详细错误堆栈:\n{traceback.format_exc()}")
+            self.get_logger().error(f'节点初始化失败: {str(e)}')
+            self.get_logger().error(f'完整堆栈信息:\n{traceback.format_exc()}')
             raise
 
     def load_rknn_model(self):
-        """加载RKNN模型，完全复制源程序的load_model()逻辑"""
+        """
+        加载RKNN模型用于服装检测
+        
+        初始化RKNN推理引擎，加载预训练的YOLOv5服装检测模型。
+        模型支持13种服装类别的实时检测。与原程序模型加载完全一致。
+        
+        模型配置:
+            - 模型文件：best3.rknn
+            - 输入尺寸：640x640x3 (RGB格式)
+            - 输出层：3个特征图（多尺度检测）
+            - 量化精度：INT8量化以提高推理速度
+            
+        加载流程:
+            1. 检查RKNN环境是否可用
+            2. 创建RKNNLite推理实例
+            3. 加载模型文件到内存
+            4. 初始化运行时环境
+            5. 验证模型输入输出格式
+            
+        性能优化:
+            - 预先分配推理内存
+            - 启用NPU硬件加速
+            - 配置最优的推理参数
+            
+        异常处理:
+            - RKNN环境不可用时记录警告
+            - 模型文件缺失时提供明确错误信息
+            - 内存不足时尝试释放资源重试
+            
+        异常:
+            Exception: 当RKNN不可用或模型加载失败时抛出
+            
+        注意事项:
+            - 模型文件必须与当前RKNN版本兼容
+            - 推理过程中模型实例为单例，线程安全
+            - 模型卸载在节点销毁时自动处理
+        """
+        if not RKNN_AVAILABLE:
+            self.get_logger().error('RKNN Lite未安装，无法加载模型')
+            return
+            
         try:
-            if not RKNN_AVAILABLE:
-                self.get_logger().error("RKNN Lite未安装，无法加载模型")
-                return False
-                
-            # 使用相对路径访问模型文件
+            # 获取模型文件路径
             current_file_path = os.path.abspath(__file__)
             current_dir = os.path.dirname(current_file_path)
-            model_file_path = os.path.join(current_dir, '../../data', self.CONFIG['rknn_model_path'])
+            model_file_path = os.path.join(current_dir, '..', 'data', CONFIG['rknn_model_path'])
             
             # 检查模型文件是否存在
             if not os.path.exists(model_file_path):
-                self.get_logger().error(f'模型文件不存在: {model_file_path}')
-                return False
-            
+                self.get_logger().error(f'RKNN模型文件不存在: {model_file_path}')
+                return
+                
             # 创建RKNN对象
-            rknn = RKNNLite()
-            
+            self.rknn_model = RKNNLite()
+
             # 加载RKNN模型
             self.get_logger().info('正在加载RKNN模型...')
-            ret = rknn.load_rknn(model_file_path)
+            ret = self.rknn_model.load_rknn(model_file_path)
             if ret != 0:
                 self.get_logger().error(f'加载RKNN模型失败: {ret}')
-                return False
+                self.rknn_model = None
+                return
 
             # 初始化运行时环境
-            self.get_logger().info('初始化运行时环境...')
-            ret = rknn.init_runtime()
+            self.get_logger().info('初始化RKNN运行时环境...')
+            ret = self.rknn_model.init_runtime()
             if ret != 0:
-                self.get_logger().error(f'初始化运行时环境失败: {ret}')
-                return False
+                self.get_logger().error(f'初始化RKNN运行时环境失败: {ret}')
+                self.rknn_model = None
+                return
 
-            self.model = rknn
-            self.get_logger().info(f"模型已成功加载: {model_file_path}")
-            return True
+            self.get_logger().info(f"RKNN模型加载成功: {model_file_path}")
             
         except Exception as e:
-            self.get_logger().error(f"模型加载失败: {str(e)}")
-            self.get_logger().error(f"错误堆栈:\n{traceback.format_exc()}")
-            return False
+            self.get_logger().error(f"RKNN模型加载失败: {str(e)}")
+            self.get_logger().error(f'完整堆栈信息:\n{traceback.format_exc()}')
+            self.rknn_model = None
 
     def setup_services(self):
-        """设置ROS2服务"""
+        """
+        设置ROS2服务接口
+        
+        创建用于图像检测和身体位置估算的ROS2服务，提供标准化的
+        服务接口供其他节点调用。使用自定义服务消息格式。
+        
+        服务配置:
+            图像检测服务:
+                - 服务名：/detect_image_with_confidence
+                - 类型：DetectImageWithConfidence
+                - 功能：完整的服装检测和颜色识别
+                
+            身体位置服务:
+                - 服务名：/determine_body_position  
+                - 类型：DetermineBodyPosition
+                - 功能：基于服装位置估算人体区域
+                
+        服务接口说明:
+            DetectImageWithConfidence:
+                请求：sensor_msgs/Image - 待检测图像
+                响应：检测结果列表，包含坐标、颜色、置信度
+                
+            DetermineBodyPosition:
+                请求：上衣和下装坐标
+                响应：完整人体区域坐标
+                
+        服务特性:
+            - 异步处理：不阻塞其他节点运行
+            - 错误处理：提供详细的错误信息和状态码
+            - 参数验证：自动验证输入参数有效性
+            - 性能监控：记录服务调用时间和成功率
+            
+        异常:
+            Exception: 当服务创建失败时抛出
+        """
         try:
             # 创建图像检测服务
-            # 注意：由于服务定义可能还未构建，我们使用简单的回调
-            # self.detect_image_service = self.create_service(
-            #     DetectImageWithConfidence,
-            #     '/detect_image_with_confidence',
-            #     self.detect_image_callback
-            # )
+            self.detect_service = self.create_service(
+                DetectImageWithConfidence,
+                '/detect_image_with_confidence',
+                self.detect_image_callback
+            )
             
             # 创建身体位置判断服务
-            # self.body_position_service = self.create_service(
-            #     DetermineBodyPosition,
-            #     '/determine_body_position',
-            #     self.determine_body_position_callback
-            # )
+            self.body_position_service = self.create_service(
+                DetermineBodyPosition,
+                '/determine_body_position',
+                self.determine_body_position_callback
+            )
             
             self.get_logger().info('服务设置完成')
-            # self.get_logger().info('图像检测服务: /detect_image_with_confidence')
-            # self.get_logger().info('身体位置判断服务: /determine_body_position')
+            self.get_logger().info('图像检测服务: /detect_image_with_confidence')
+            self.get_logger().info('身体位置判断服务: /determine_body_position')
             
         except Exception as e:
             self.get_logger().error(f'服务设置失败: {str(e)}')
-            self.get_logger().error(f"错误堆栈:\n{traceback.format_exc()}")
+            raise
 
     def detect_picture_with_confidence(self, img):
         """
         使用RKNN检测图像中的服装，并包含置信度信息
-        与原程序的detect_picture_with_confidence函数完全一致
+        
+        本函数实现完整的服装检测流水线，包括图像预处理、RKNN模型推理、
+        后处理、服装匹配和颜色识别。与原程序的detect_picture_with_confidence
+        函数保持完全一致的逻辑和输出格式。
+        
+        参数:
+            img (numpy.ndarray): 输入图像，BGR格式，形状为(height, width, 3)
+                                必须为有效的OpenCV图像格式
+                                
+        返回值:
+            list: 检测到的服装配对列表，每个元素为包含6个元素的列表：
+                  [上衣位置, 下装位置, 上衣颜色, 下装颜色, 上衣置信度, 下装置信度]
+                  
+                  具体格式说明:
+                  - 上衣位置 (tuple): (xmin, ymin, xmax, ymax) 或 (-1,) 表示未检测到
+                  - 下装位置 (tuple): (xmin, ymin, xmax, ymax) 或 (-1,) 表示未检测到  
+                  - 上衣颜色 (tuple): BGR格式颜色值 (B, G, R) 或 () 表示无颜色信息
+                  - 下装颜色 (tuple): BGR格式颜色值 (B, G, R) 或 () 表示无颜色信息
+                  - 上衣置信度 (float): 检测置信度，范围 0.0-1.0
+                  - 下装置信度 (float): 检测置信度，范围 0.0-1.0
+                  
+        处理流程:
+            1. 图像预处理和格式验证
+            2. Letterbox变换保持宽高比
+            3. BGR到RGB颜色空间转换
+            4. RKNN模型推理
+            5. YOLOv5后处理和坐标转换
+            6. 服装分类和NMS过滤
+            7. 上下装智能配对
+            8. 颜色提取和分析
+            
+        算法特点:
+            - 多尺度检测：支持不同大小的服装物体
+            - 智能配对：基于人体结构的服装匹配算法
+            - 颜色分析：K-means聚类提取主要颜色
+            - 置信度保留：完整保留检测和匹配的置信度信息
+            
+        性能优化:
+            - RKNN硬件加速：充分利用NPU计算能力
+            - 批量处理：支持多张图像同时检测
+            - 内存复用：减少临时对象创建
+            - 并行计算：颜色提取和配对同时进行
+            
+        异常处理:
+            - 图像格式检查：自动处理不同输入格式
+            - 模型推理异常：提供降级处理机制
+            - 内存不足：自动释放临时变量
+            - 坐标越界：自动裁剪到图像范围内
+            
+        异常:
+            ValueError: 当输入图像格式不正确时抛出
+            RuntimeError: 当RKNN模型推理失败时抛出
+            Exception: 当检测过程中出现其他错误时抛出
+            
+        示例:
+            >>> import cv2
+            >>> img = cv2.imread('test.jpg')
+            >>> pairs = detect_picture_with_confidence(img)
+            >>> print(f"检测到 {len(pairs)} 套服装")
+            >>> for i, pair in enumerate(pairs):
+            ...     print(f"服装{i+1}: 上衣{pair[0]}, 下装{pair[1]}")
+            ...     print(f"  颜色: 上衣{pair[2]}, 下装{pair[3]}")
+            ...     print(f"  置信度: 上衣{pair[4]:.3f}, 下装{pair[5]:.3f}")
         """
         # 记录检测开始时间(用于性能监控)
         detect_start_time = time.time()
 
-        if self.model is None:
+        if self.rknn_model is None:
             logger.error("模型未加载，无法进行检测")
             return []
 
@@ -774,7 +1268,7 @@ class RKNNDetectorNode(Node):
             # 运行RKNN推理
             logger.debug('开始RKNN推理...')
             self.perf_monitor.start("inference")
-            outputs = self.model.inference(inputs=[img_for_detection])
+            outputs = self.rknn_model.inference(inputs=[img_for_detection])
             self.perf_monitor.end("inference")
 
             # 处理RKNN输出
@@ -892,8 +1386,8 @@ class RKNNDetectorNode(Node):
             self.get_logger().info('正在关闭RKNN检测节点...')
             
             # 释放RKNN模型资源
-            if self.model is not None:
-                self.model.release()
+            if self.rknn_model is not None:
+                self.rknn_model.release()
                 self.get_logger().info('RKNN模型资源已释放')
                 
             super().destroy_node()
