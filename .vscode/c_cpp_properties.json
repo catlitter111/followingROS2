@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/cat/Desktop/car/ROS/ROS2/depend/install/serial/include/**",
+        "/home/cat/Desktop/car/ROS/ROS2/depend/install/dlrobot_robot_msg/include/**",
+        "/home/cat/Desktop/car/ROS/ROS2/depend/install/ackermann_msgs/include/**",
+        "/home/cat/Desktop/Harvesting-Robot/robot_ROS2-6_9/install/bottle_detection_msgs/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/cat/Desktop/aufoll/src/turn_on_dlrobot_robot/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
