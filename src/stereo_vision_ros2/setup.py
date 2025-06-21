@@ -1,0 +1,33 @@
+from setuptools import setup
+import os
+from glob import glob
+
+package_name = 'stereo_vision_ros2'
+
+setup(
+    name=package_name,
+    version='1.0.0',
+    packages=[package_name],
+    data_files=[
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        # 包含服务定义文件
+        (os.path.join('share', package_name, 'srv'), glob('srv/*.srv')),
+        # 包含launch文件
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='Stereo Vision Team',
+    maintainer_email='team@stereo-vision.com',
+    description='ROS2双目立体视觉功能包 - 基于OpenCV和Open3D的双目立体视觉系统',
+    license='MIT',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'stereo_vision_node = stereo_vision_ros2.stereo_vision_node:main',
+            'test_distance_client = stereo_vision_ros2.test_distance_client:main',
+        ],
+    },
+) 

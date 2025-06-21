@@ -1,0 +1,9 @@
+# 距离查询服务定义
+# 输入：图像坐标点
+int32 x       # 像素x坐标
+int32 y       # 像素y坐标
+---
+# 输出：距离信息
+bool success         # 查询是否成功
+float64 distance     # 距离值（米）
+string message       # 状态信息 
