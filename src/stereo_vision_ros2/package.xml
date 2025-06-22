@@ -17,10 +17,25 @@
   
   <!-- Python依赖 -->
   <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-opencv-contrib</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-scipy</exec_depend>
   <exec_depend>python3-pil</exec_depend>
   <exec_depend>python3-sklearn</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-setuptools</exec_depend>
+  
+  <!-- 3D计算和可视化依赖 -->
+  <exec_depend>python3-open3d</exec_depend>
+  
+  <!-- 可选的高性能计算依赖 -->
+  <exec_depend>python3-numba</exec_depend>
+  <exec_depend>python3-psutil</exec_depend>
+  
+  <!-- 图像处理和计算机视觉扩展 -->
+  <exec_depend>python3-concurrent-futures</exec_depend>
+  <exec_depend>python3-threading</exec_depend>
   
   <!-- 接口功能包依赖 -->
   <depend>stereo_vision_interfaces</depend>
