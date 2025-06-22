@@ -308,7 +308,8 @@ def getRectifyTransform(height, width, config):
             right_K, right_dist, R2, P2, (width, height), cv2.CV_32FC1
         )
 
-        return map1x, map1y, map2x, map2y, Q
+        # 返回所有需要的值，包括ROI信息
+        return map1x, map1y, map2x, map2y, Q, roi1, roi2, None
     except Exception as e:
         print(f"立体校正变换计算错误: {str(e)}")
         print(f"完整堆栈信息:\n{traceback.format_exc()}")
@@ -708,6 +709,11 @@ class StereoVisionNode(Node):
         self.current_left_image = None
         self.current_disparity = None
         
+        # 添加缺失的关键成员变量初始化
+        self.running = True  # 节点运行状态标志
+        self.points_3d_lock = threading.Lock()  # 线程安全锁
+        self.current_points_3d = None  # 当前3D点云数据
+        
         # 立体校正映射矩阵
         self.map1x = None
         self.map1y = None
@@ -1076,27 +1082,29 @@ class StereoVisionNode(Node):
             
             self.get_logger().info(f'收到距离查询请求: 坐标({x}, {y})')
             
-            # 线程安全地获取当前3D点云数据
+            # 线程安全地获取当前3D点云数据副本
             with self.points_3d_lock:
                 if self.current_points_3d is None:
                     response.success = False
                     response.distance = 0.0
                     response.message = "没有可用的3D点云数据"
                     return response
-                
-                # 使用与原程序完全一致的距离测量算法
-                distance = measure_distance(self.current_points_3d, x, y)
-                
-                if distance is not None:
-                    response.success = True
-                    response.distance = distance
-                    response.message = f"测量成功，距离: {distance:.3f}米"
-                    self.get_logger().info(f'距离测量成功: {distance:.3f}米')
-                else:
-                    response.success = False
-                    response.distance = 0.0
-                    response.message = "无效的坐标点或深度数据"
-                    self.get_logger().warn(f'坐标({x}, {y})的距离测量失败')
+                # 创建数据副本，在锁外部进行计算
+                points_3d_copy = self.current_points_3d.copy()
+            
+            # 在锁外部进行距离计算，避免长时间持锁
+            distance = measure_distance(points_3d_copy, x, y)
+            
+            if distance is not None:
+                response.success = True
+                response.distance = distance
+                response.message = f"测量成功，距离: {distance:.3f}米"
+                self.get_logger().info(f'距离测量成功: {distance:.3f}米')
+            else:
+                response.success = False
+                response.distance = 0.0
+                response.message = "无效的坐标点或深度数据"
+                self.get_logger().warn(f'坐标({x}, {y})的距离测量失败')
                 
         except Exception as e:
             response.success = False

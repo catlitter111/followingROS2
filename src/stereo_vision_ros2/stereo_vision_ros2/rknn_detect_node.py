@@ -1397,6 +1397,185 @@ class RKNNDetectorNode(Node):
             self.get_logger().error(f'节点关闭错误: {str(e)}')
             self.get_logger().error(f"错误堆栈:\n{traceback.format_exc()}")
 
+    def detect_image_callback(self, request, response):
+        """
+        图像检测服务回调函数
+        
+        接收ROS图像消息，调用detect_picture_with_confidence进行检测，
+        将检测结果转换为ROS服务响应格式。
+        
+        Args:
+            request: DetectImageWithConfidence请求，包含待检测图像
+            response: DetectImageWithConfidence响应，将填充检测结果
+            
+        Returns:
+            DetectImageWithConfidence.Response: 包含检测结果的响应消息
+        """
+        try:
+            self.get_logger().info('收到图像检测服务请求')
+            
+            # 将ROS图像消息转换为OpenCV格式
+            cv_image = self.bridge.imgmsg_to_cv2(request.image, 'bgr8')
+            
+            # 执行检测
+            pairs = self.detect_picture_with_confidence(cv_image)
+            
+            # 转换结果为ROS消息格式
+            response.upper_positions = []
+            response.lower_positions = []
+            response.upper_colors = []
+            response.lower_colors = []
+            response.upper_confidences = []
+            response.lower_confidences = []
+            
+            for pair in pairs:
+                upper_pos, lower_pos, upper_color, lower_color, upper_conf, lower_conf = pair
+                
+                # 处理上衣位置
+                if upper_pos != (-1,):
+                    upper_point = Point()
+                    upper_point.x = float(upper_pos[0])  # xmin
+                    upper_point.y = float(upper_pos[1])  # ymin
+                    # 使用更安全的坐标编码方式，避免溢出
+                    upper_point.z = float(upper_pos[2] + upper_pos[3] * 0.0001)  # 编码xmax和ymax
+                    response.upper_positions.append(upper_point)
+                    
+                    # 上衣颜色
+                    if upper_color:
+                        color_msg = ColorRGBA()
+                        color_msg.b = float(upper_color[0]) / 255.0
+                        color_msg.g = float(upper_color[1]) / 255.0
+                        color_msg.r = float(upper_color[2]) / 255.0
+                        color_msg.a = 1.0
+                        response.upper_colors.append(color_msg)
+                    else:
+                        response.upper_colors.append(ColorRGBA())
+                        
+                    response.upper_confidences.append(float(upper_conf))
+                else:
+                    # 无效位置标记
+                    invalid_point = Point()
+                    invalid_point.x = -1.0
+                    invalid_point.y = -1.0
+                    invalid_point.z = -1.0
+                    response.upper_positions.append(invalid_point)
+                    response.upper_colors.append(ColorRGBA())
+                    response.upper_confidences.append(0.0)
+                
+                # 处理下装位置
+                if lower_pos != (-1,):
+                    lower_point = Point()
+                    lower_point.x = float(lower_pos[0])  # xmin
+                    lower_point.y = float(lower_pos[1])  # ymin
+                    # 使用更安全的坐标编码方式，避免溢出
+                    lower_point.z = float(lower_pos[2] + lower_pos[3] * 0.0001)  # 编码xmax和ymax
+                    response.lower_positions.append(lower_point)
+                    
+                    # 下装颜色
+                    if lower_color:
+                        color_msg = ColorRGBA()
+                        color_msg.b = float(lower_color[0]) / 255.0
+                        color_msg.g = float(lower_color[1]) / 255.0
+                        color_msg.r = float(lower_color[2]) / 255.0
+                        color_msg.a = 1.0
+                        response.lower_colors.append(color_msg)
+                    else:
+                        response.lower_colors.append(ColorRGBA())
+                        
+                    response.lower_confidences.append(float(lower_conf))
+                else:
+                    # 无效位置标记
+                    invalid_point = Point()
+                    invalid_point.x = -1.0
+                    invalid_point.y = -1.0
+                    invalid_point.z = -1.0
+                    response.lower_positions.append(invalid_point)
+                    response.lower_colors.append(ColorRGBA())
+                    response.lower_confidences.append(0.0)
+            
+            response.pairs_count = len(pairs)
+            response.success = True
+            response.message = f"检测成功，找到 {len(pairs)} 套服装"
+            
+            self.get_logger().info(f'检测完成，返回 {len(pairs)} 套服装结果')
+            
+        except Exception as e:
+            response.success = False
+            response.pairs_count = 0
+            response.message = f"检测失败: {str(e)}"
+            self.get_logger().error(f'图像检测服务错误: {str(e)}')
+            self.get_logger().error(f'完整堆栈信息:\n{traceback.format_exc()}')
+        
+        return response
+
+    def determine_body_position_callback(self, request, response):
+        """
+        身体位置判断服务回调函数
+        
+        基于上衣和下装的坐标信息，估算完整的人体区域。
+        
+        Args:
+            request: DetermineBodyPosition请求，包含上衣和下装坐标
+            response: DetermineBodyPosition响应，将填充身体位置结果
+            
+        Returns:
+            DetermineBodyPosition.Response: 包含身体位置的响应消息
+        """
+        try:
+            self.get_logger().info('收到身体位置判断服务请求')
+            
+            # 将ROS图像消息转换为OpenCV格式
+            cv_image = self.bridge.imgmsg_to_cv2(request.image, 'bgr8')
+            
+            # 解码坐标信息（反向操作上面的编码）
+            upper_coords = request.upper_clothes_coord
+            lower_coords = request.lower_clothes_coord
+            
+            # 解码上衣坐标
+            if upper_coords.x >= 0:
+                upper_xmin = int(upper_coords.x)
+                upper_ymin = int(upper_coords.y)
+                upper_xmax = int(upper_coords.z)
+                upper_ymax = int((upper_coords.z - upper_xmax) / 0.0001)
+                c = [upper_xmin, upper_ymin, upper_xmax, upper_ymax]
+            else:
+                c = None
+            
+            # 解码下装坐标
+            if lower_coords.x >= 0:
+                lower_xmin = int(lower_coords.x)
+                lower_ymin = int(lower_coords.y)
+                lower_xmax = int(lower_coords.z)
+                lower_ymax = int((lower_coords.z - lower_xmax) / 0.0001)
+                p = [lower_xmin, lower_ymin, lower_xmax, lower_ymax]
+            else:
+                p = None
+            
+            # 调用身体位置判断函数
+            body_positions = Determine_the_position_of_the_entire_body(c, p, cv_image)
+            
+            # 转换结果为ROS消息格式
+            response.body_positions = []
+            for pos in body_positions:
+                point = Point()
+                point.x = float(pos[0])
+                point.y = float(pos[1])
+                point.z = float(pos[2]) if len(pos) > 2 else 0.0
+                response.body_positions.append(point)
+            
+            response.success = True
+            response.message = f"身体位置判断成功，返回 {len(body_positions)} 个位置点"
+            
+            self.get_logger().info(f'身体位置判断完成，返回 {len(body_positions)} 个位置点')
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"身体位置判断失败: {str(e)}"
+            self.get_logger().error(f'身体位置判断服务错误: {str(e)}')
+            self.get_logger().error(f'完整堆栈信息:\n{traceback.format_exc()}')
+        
+        return response
+
 
 def main(args=None):
     """主函数"""
