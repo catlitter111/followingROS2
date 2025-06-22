@@ -160,7 +160,7 @@ class HumanDetectionVisualizer(Node):
         # 订阅左相机图像
         self.image_sub = self.create_subscription(
             ImageMsg,
-            '/stereo_vision/left_image',
+            '/stereo/left/image_raw',
             self.image_callback,
             10
         )
@@ -172,7 +172,7 @@ class HumanDetectionVisualizer(Node):
             10
         )
         
-        self.get_logger().info('订阅话题: /stereo_vision/left_image')
+        self.get_logger().info('订阅话题: /stereo/left/image_raw')
         self.get_logger().info('发布话题: /stereo_vision/annotated_image')
         
     def image_callback(self, msg: ImageMsg) -> None:

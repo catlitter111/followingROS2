@@ -1436,8 +1436,8 @@ class RKNNDetectorNode(Node):
                     upper_point = Point()
                     upper_point.x = float(upper_pos[0])  # xmin
                     upper_point.y = float(upper_pos[1])  # ymin
-                    # 使用更安全的坐标编码方式，避免溢出
-                    upper_point.z = float(upper_pos[2] + upper_pos[3] * 0.0001)  # 编码xmax和ymax
+                    # 使用标准16位移位编码，与解码方式保持一致
+                    upper_point.z = float((upper_pos[3] << 16) | upper_pos[2])  # 编码xmax和ymax
                     response.upper_positions.append(upper_point)
                     
                     # 上衣颜色
@@ -1467,8 +1467,8 @@ class RKNNDetectorNode(Node):
                     lower_point = Point()
                     lower_point.x = float(lower_pos[0])  # xmin
                     lower_point.y = float(lower_pos[1])  # ymin
-                    # 使用更安全的坐标编码方式，避免溢出
-                    lower_point.z = float(lower_pos[2] + lower_pos[3] * 0.0001)  # 编码xmax和ymax
+                    # 使用标准16位移位编码，与解码方式保持一致
+                    lower_point.z = float((lower_pos[3] << 16) | lower_pos[2])  # 编码xmax和ymax
                     response.lower_positions.append(lower_point)
                     
                     # 下装颜色
@@ -1535,8 +1535,8 @@ class RKNNDetectorNode(Node):
             if upper_coords.x >= 0:
                 upper_xmin = int(upper_coords.x)
                 upper_ymin = int(upper_coords.y)
-                upper_xmax = int(upper_coords.z)
-                upper_ymax = int((upper_coords.z - upper_xmax) / 0.0001)
+                upper_xmax = int(upper_coords.z) & 0xFFFF
+                upper_ymax = int(upper_coords.z) >> 16
                 c = [upper_xmin, upper_ymin, upper_xmax, upper_ymax]
             else:
                 c = None
@@ -1545,8 +1545,8 @@ class RKNNDetectorNode(Node):
             if lower_coords.x >= 0:
                 lower_xmin = int(lower_coords.x)
                 lower_ymin = int(lower_coords.y)
-                lower_xmax = int(lower_coords.z)
-                lower_ymax = int((lower_coords.z - lower_xmax) / 0.0001)
+                lower_xmax = int(lower_coords.z) & 0xFFFF
+                lower_ymax = int(lower_coords.z) >> 16
                 p = [lower_xmin, lower_ymin, lower_xmax, lower_ymax]
             else:
                 p = None
