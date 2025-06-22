@@ -16,6 +16,8 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         # 包含数据文件（RKNN模型等）
         (os.path.join('share', package_name, 'data'), glob('data/*')),
+        # 包含配置文件（如果有）
+        (os.path.join('share', package_name, 'config'), glob('config/*')),
         # ROS2可执行文件位置
         (os.path.join('lib', package_name), []),
     ],
@@ -30,6 +32,7 @@ setup(
         'console_scripts': [
             'stereo_vision_node = stereo_vision_ros2.stereo_vision_node:main',
             'rknn_detect_node = stereo_vision_ros2.rknn_detect_node_main:main',
+            'human_detection_visualizer = stereo_vision_ros2.human_detection_visualizer:main',
         ],
     },
-) 
+)
