@@ -197,7 +197,7 @@ class RKNNDetectorNode(Node):
             # 使用相对路径访问模型文件
             current_file_path = os.path.abspath(__file__)
             current_dir = os.path.dirname(current_file_path)
-            model_file_path = os.path.join(current_dir, '../../data', self.CONFIG['rknn_model_path'])
+            model_file_path = os.path.join(current_dir, '../data', self.CONFIG['rknn_model_path'])
             
             # 检查模型文件是否存在
             if not os.path.exists(model_file_path):

@@ -635,7 +635,7 @@ class StereoVisionNode(Node):
         - /stereo/disparity_image: 视差图像
         
     提供的服务:
-        - /get_distance: 获取指定像素点的3D距离信息
+        - /stereo_vision/get_distance: 获取指定像素点的3D距离信息
         
     算法流程:
         1. 双目相机初始化和参数加载
@@ -930,7 +930,7 @@ class StereoVisionNode(Node):
         指定像素点的3D坐标和距离信息。使用自定义服务接口。
         
         服务配置:
-            - 服务名称: /get_distance
+            - 服务名称: /stereo_vision/get_distance
             - 服务类型: stereo_vision_interfaces/GetDistance
             - 回调函数: get_distance_callback
             
@@ -955,15 +955,15 @@ class StereoVisionNode(Node):
             Exception: 当服务创建失败时抛出
         """
         try:
-            # 创建距离测量服务
+            # 创建距离查询服务（与原程序的测距功能完全一致）
             self.distance_service = self.create_service(
                 GetDistance,
-                '/get_distance',
+                '/stereo_vision/get_distance',  # 修改服务名称与其他节点保持一致
                 self.get_distance_callback
             )
             
             self.get_logger().info('距离测量服务设置完成')
-            self.get_logger().info('  服务名称: /get_distance')
+            self.get_logger().info('  服务名称: /stereo_vision/get_distance')
             self.get_logger().info('  服务类型: stereo_vision_interfaces/GetDistance')
             
         except Exception as e:
